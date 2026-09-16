@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "Laptop Remote",
+    "slug": "phone-laptop-remote",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "phone-laptop-remote",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "backgroundColor": "#0D1117",
+      "resizeMode": "contain",
+      "image": "./assets/images/icon.png"
+    },
+    "ios": {
+      "supportsTablet": false
+    },
+    "android": {},
+    "web": {
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}

@@ -1,0 +1,24 @@
+kind = "mobile"
+previewPath = "/"
+title = "Laptop Remote"
+description = "A secure Android companion that pairs with a Windows laptop over the local network, sends allowlisted commands, surfaces live system health, and keeps an auditable command history."
+version = "1.0.0"
+id = "artifacts/phone-laptop-remote"
+router = "expo-domain"
+
+[[services]]
+name = "expo"
+ensurePreviewReachable = "/status"
+paths = [ "/" ]
+localPort = 22165
+
+[services.development]
+run = "pnpm --filter @workspace/phone-laptop-remote run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/phone-laptop-remote", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/phone-laptop-remote", "run", "serve" ]
+
+[services.env]
+PORT = "22165"
+BASE_PATH = "/"

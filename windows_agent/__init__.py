@@ -1,0 +1,1 @@
+"""Importable wrapper for the reference Windows agent used by tests."""
