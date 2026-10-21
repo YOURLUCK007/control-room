@@ -30,14 +30,27 @@ except ImportError:  # pragma: no cover - the agent still starts without telemet
 
 APP_NAME = "Laptop Remote"
 PAIRING_TTL_SECONDS = 600
+MAX_PAIR_ATTEMPTS = 5
 REQUEST_WINDOW_SECONDS = 30
-MAX_BODY_BYTES = 64 * 1024
+MAX_BODY_BYTES = 512 * 1024
+MAX_FILE_BYTES = 128 * 1024
+MAX_COMMAND_CHARS = 1200
+MAX_COMMAND_OUTPUT_CHARS = 12_000
 ROOTS = [Path.home() / "Desktop", Path.home() / "Documents", Path.home() / "Downloads"]
-DESTRUCTIVE_ACTIONS = {"DELETE_FILE", "RESTART_PC", "SHUTDOWN_PC", "SLEEP_PC", "PROCESS_CONTROL"}
+DESTRUCTIVE_ACTIONS = {
+    "DELETE_FILE", "RESTART_PC", "SHUTDOWN_PC", "SLEEP_PC",
+    "PROCESS_CONTROL", "WRITE_FILE", "RUN_COMMAND",
+}
 ALLOWED_ACTIONS = {
     "OPEN_APPLICATION",
     "OPEN_FOLDER",
+    "OPEN_FILE",
     "SEARCH_FILES",
+    "LIST_FILES",
+    "READ_FILE",
+    "WRITE_FILE",
+    "RUN_COMMAND",
+    "SHOW_DESKTOP",
     "CREATE_FOLDER",
     "COPY_FILE",
     "MOVE_FILE",
@@ -83,6 +96,20 @@ def resolve_user_path(value: Any) -> Path:
     return requested
 
 
+def resolve_folder(value: Any) -> Path:
+    """Resolve a friendly folder name or an explicit path inside an allowed root."""
+    if isinstance(value, str):
+        aliases = {
+            "desktop": Path.home() / "Desktop",
+            "documents": Path.home() / "Documents",
+            "downloads": Path.home() / "Downloads",
+        }
+        root = aliases.get(value.strip().casefold())
+        if root is not None:
+            return resolve_user_path(str(root))
+    return resolve_user_path(value)
+
+
 def discover_file(name: str) -> list[Path]:
     needle = name.casefold()
     matches: list[Path] = []
@@ -92,8 +119,12 @@ def discover_file(name: str) -> list[Path]:
         for path in root.rglob("*"):
             if len(matches) >= 50:
                 return matches
-            if path.name.casefold() == needle or needle in path.name.casefold():
-                matches.append(path)
+            try:
+                safe_path = resolve_user_path(str(path))
+            except (OSError, PermissionError):
+                continue
+            if safe_path.name.casefold() == needle or needle in safe_path.name.casefold():
+                matches.append(safe_path)
     return matches
 
 
@@ -130,10 +161,24 @@ def open_path(path: Path) -> str:
 
 def interpret_text(text: str) -> tuple[str, dict[str, Any]]:
     normalized = text.casefold().strip()
+    normalized = normalized.rstrip(" .!?")
     if normalized.startswith(("show cpu", "show system", "system status", "how much ram", "how much storage", "battery")):
         return "SYSTEM_INFO", {}
-    if normalized.startswith(("take a screenshot", "screenshot")):
-        return "SCREENSHOT", {}
+    if normalized in {"show desktop", "show my desktop", "show me the desktop", "minimize everything"}:
+        return "SHOW_DESKTOP", {}
+    folder_aliases = {
+        "open my files": "Documents",
+        "open file explorer": "Documents",
+        "open explorer": "Documents",
+        "open downloads": "Downloads",
+        "open downloads folder": "Downloads",
+        "open documents": "Documents",
+        "open documents folder": "Documents",
+        "open desktop": "Desktop",
+        "open desktop folder": "Desktop",
+    }
+    if normalized in folder_aliases:
+        return "OPEN_FOLDER", {"path": folder_aliases[normalized]}
     if normalized.startswith(("lock my", "lock the")):
         return "LOCK_PC", {}
     if normalized.startswith(("restart", "reboot")):
@@ -142,8 +187,18 @@ def interpret_text(text: str) -> tuple[str, dict[str, Any]]:
         return "SHUTDOWN_PC", {}
     if normalized.startswith(("put my laptop to sleep", "sleep my")):
         return "SLEEP_PC", {}
+    if normalized.startswith(("open folder ", "browse folder ")):
+        return "OPEN_FOLDER", {"name": text.split(" ", 2)[2].strip()}
+    if normalized.startswith(("open file ", "find file ")):
+        return "OPEN_FILE", {"name": text.split(" ", 2)[2].strip()}
+    if normalized.startswith(("read file ", "read the file ")):
+        target = text.split(" ", 2)[2].strip() if normalized.startswith("read file ") else text.split(" ", 3)[3].strip()
+        return "READ_FILE", {"name": target}
     if normalized.startswith(("open ", "launch ")):
         target = text.split(" ", 1)[1].strip()
+        matches = [path for path in discover_file(target) if path.is_file()]
+        if len(matches) == 1:
+            return "OPEN_FILE", {"path": str(matches[0])}
         return "OPEN_APPLICATION", {"name": target}
     if "find " in normalized or normalized.startswith("search "):
         target = text.split(" ", 1)[1].strip()
@@ -170,6 +225,16 @@ def execute_action(action: str, parameters: dict[str, Any], confirmed: bool) -> 
         return execute_action(action, parameters, confirmed)
     if action == "SYSTEM_INFO":
         return {"success": True, "message": "System information collected.", "data": telemetry()}
+    if action == "SHOW_DESKTOP":
+        if os.name != "nt":
+            raise RuntimeError("Showing the desktop is only supported on Windows.")
+        import ctypes
+        keybd_event = ctypes.windll.user32.keybd_event
+        keybd_event(0x5B, 0, 0, 0)  # Left Windows key
+        keybd_event(0x44, 0, 0, 0)  # D
+        keybd_event(0x44, 0, 2, 0)
+        keybd_event(0x5B, 0, 2, 0)
+        return {"success": True, "message": "Desktop shown."}
     if action == "NETWORK_STATUS":
         return {"success": True, "message": "Network status collected.", "data": {"hostname": socket.gethostname(), "ip": socket.gethostbyname(socket.gethostname())}}
     if action == "BATTERY_STATUS":
@@ -181,16 +246,152 @@ def execute_action(action: str, parameters: dict[str, Any], confirmed: bool) -> 
         return {"success": True, "message": "Storage status collected.", "data": {"drive": drive, "free_bytes": usage.free, "total_bytes": usage.total}}
     if action == "OPEN_APPLICATION":
         target = safe_name(parameters.get("name"), "name")
+        windows = Path(os.environ.get("SystemRoot", r"C:\Windows"))
+        built_in_apps = {
+            "task manager": windows / "System32" / "Taskmgr.exe",
+            "taskmgr": windows / "System32" / "Taskmgr.exe",
+            "command prompt": Path(os.environ.get("COMSPEC", str(windows / "System32" / "cmd.exe"))),
+            "cmd": Path(os.environ.get("COMSPEC", str(windows / "System32" / "cmd.exe"))),
+            "powershell": windows / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe",
+        }
+        built_in = built_in_apps.get(target.casefold())
+        if built_in and built_in.exists():
+            return {"success": True, "message": f"{target} opened successfully.", "data": {"path": open_path(built_in)}}
         path = discover_application(target)
         if not path:
             return {"success": False, "message": f"{target} was not found on the laptop."}
         return {"success": True, "message": f"{target} opened successfully.", "data": {"path": open_path(path)}}
     if action == "OPEN_FOLDER":
+        if parameters.get("path"):
+            path = resolve_folder(parameters.get("path"))
+            if not path.is_dir():
+                return {"success": False, "message": "That folder does not exist."}
+            return {"success": True, "message": "Folder opened successfully.", "data": {"path": open_path(path)}}
         target = safe_name(parameters.get("name"), "name")
         matches = [path for path in discover_file(target) if path.is_dir()]
         if len(matches) != 1:
             return {"success": False, "message": f"Found {len(matches)} folders named {target}; choose one explicitly."}
         return {"success": True, "message": f"{target} opened successfully.", "data": {"path": open_path(matches[0])}}
+    if action == "OPEN_FILE":
+        path_value = parameters.get("path")
+        if path_value:
+            path = resolve_user_path(path_value)
+            matches = [path] if path.is_file() else []
+        else:
+            target = safe_name(parameters.get("name"), "name")
+            matches = [path for path in discover_file(target) if path.is_file()]
+        if not matches:
+            return {"success": False, "message": "No matching file was found in Desktop, Documents, or Downloads."}
+        if len(matches) != 1:
+            return {"success": False, "message": f"Found {len(matches)} matching files. Use the file browser to choose one.", "data": {"matches": [str(path) for path in matches[:20]]}}
+        return {"success": True, "message": "File opened successfully.", "data": {"path": open_path(matches[0])}}
+    if action == "LIST_FILES":
+        directory = resolve_folder(parameters.get("path", "Documents"))
+        if not directory.is_dir():
+            return {"success": False, "message": "That folder does not exist."}
+        entries = []
+        try:
+            for child in sorted(directory.iterdir(), key=lambda item: (not item.is_dir(), item.name.casefold())):
+                try:
+                    safe_child = resolve_user_path(str(child))
+                    stat = safe_child.stat()
+                    entries.append({
+                        "name": safe_child.name,
+                        "path": str(safe_child),
+                        "is_directory": safe_child.is_dir(),
+                        "size": stat.st_size if safe_child.is_file() else None,
+                        "modified": stat.st_mtime,
+                    })
+                except (OSError, PermissionError):
+                    continue
+                if len(entries) >= 100:
+                    break
+        except OSError:
+            return {"success": False, "message": "The agent could not list that folder."}
+        return {"success": True, "message": f"Showing {len(entries)} items.", "data": {"path": str(directory), "entries": entries}}
+    if action == "READ_FILE":
+        if parameters.get("path"):
+            path = resolve_user_path(parameters.get("path"))
+        else:
+            target = safe_name(parameters.get("name"), "name")
+            matches = [candidate for candidate in discover_file(target) if candidate.is_file()]
+            if len(matches) != 1:
+                return {"success": False, "message": f"Found {len(matches)} matching files. Use the file browser to choose one.", "data": {"matches": [str(candidate) for candidate in matches[:20]]}}
+            path = resolve_user_path(str(matches[0]))
+        if not path.is_file():
+            return {"success": False, "message": "That file does not exist."}
+        if path.stat().st_size > MAX_FILE_BYTES:
+            return {"success": False, "message": f"Files larger than {MAX_FILE_BYTES // 1024} KB cannot be opened in the phone editor."}
+        raw = path.read_bytes()
+        try:
+            content = raw.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise ValueError("This file is not UTF-8 text and cannot be edited in the phone editor.") from error
+        if "\x00" in content:
+            raise ValueError("This file appears to be binary and cannot be edited in the phone editor.")
+        return {"success": True, "message": "Text file opened.", "data": {"path": str(path), "content": content}}
+    if action == "WRITE_FILE":
+        path = resolve_user_path(parameters.get("path"))
+        content = parameters.get("content")
+        if not isinstance(content, str):
+            raise ValueError("File contents must be text.")
+        encoded = content.encode("utf-8")
+        if len(encoded) > MAX_FILE_BYTES:
+            raise ValueError(f"Edited files cannot exceed {MAX_FILE_BYTES // 1024} KB.")
+        if path.exists() and not path.is_file():
+            raise ValueError("The selected path is not a file.")
+        if not path.parent.is_dir():
+            raise ValueError("The parent folder does not exist.")
+        backup_path = None
+        if path.exists():
+            backup_path = path.with_name(f"{path.name}.laptop-remote-{time.time_ns()}.bak")
+            shutil.copy2(path, backup_path)
+        temporary_path = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="wb", dir=path.parent, prefix=".laptop-remote-", delete=False) as temporary:
+                temporary.write(encoded)
+                temporary_path = Path(temporary.name)
+            os.replace(temporary_path, path)
+        finally:
+            if temporary_path and temporary_path.exists():
+                temporary_path.unlink()
+        return {"success": True, "message": "File saved.", "data": {"path": str(path), "backup": str(backup_path) if backup_path else None, "bytes_written": len(encoded)}}
+    if action == "RUN_COMMAND":
+        command = parameters.get("command")
+        if not isinstance(command, str) or not command.strip() or len(command) > MAX_COMMAND_CHARS or "\x00" in command:
+            raise ValueError(f"Enter a command between 1 and {MAX_COMMAND_CHARS} characters.")
+        if os.name != "nt":
+            raise RuntimeError("The remote terminal is only supported on Windows.")
+        powershell = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+        try:
+            completed = subprocess.run(
+                [str(powershell), "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command],
+                cwd=str(Path.home()),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=20,
+                shell=False,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as error:
+            stdout = error.stdout.decode("utf-8", errors="replace") if isinstance(error.stdout, bytes) else (error.stdout or "")
+            stderr = error.stderr.decode("utf-8", errors="replace") if isinstance(error.stderr, bytes) else (error.stderr or "")
+            return {"success": False, "message": "Command timed out after 20 seconds.", "data": {"stdout": stdout[-MAX_COMMAND_OUTPUT_CHARS:], "stderr": stderr[-MAX_COMMAND_OUTPUT_CHARS:], "timed_out": True}}
+        stdout = completed.stdout or ""
+        stderr = completed.stderr or ""
+        truncated = len(stdout) > MAX_COMMAND_OUTPUT_CHARS or len(stderr) > MAX_COMMAND_OUTPUT_CHARS
+        return {
+            "success": completed.returncode == 0,
+            "message": "Command completed." if completed.returncode == 0 else f"Command exited with code {completed.returncode}.",
+            "data": {
+                "exit_code": completed.returncode,
+                "stdout": stdout[-MAX_COMMAND_OUTPUT_CHARS:],
+                "stderr": stderr[-MAX_COMMAND_OUTPUT_CHARS:],
+                "truncated": truncated,
+            },
+        }
     if action == "SEARCH_FILES":
         query = safe_name(parameters.get("query"), "query").casefold()
         results = []
@@ -198,6 +399,10 @@ def execute_action(action: str, parameters: dict[str, Any], confirmed: bool) -> 
             if not root.exists():
                 continue
             for path in root.rglob("*"):
+                try:
+                    path = resolve_user_path(str(path))
+                except (OSError, PermissionError):
+                    continue
                 if query in path.name.casefold():
                     results.append({"name": path.name, "path": str(path), "is_directory": path.is_dir(), "modified": path.stat().st_mtime})
                 if len(results) >= 50:
@@ -266,12 +471,20 @@ class AgentState:
         self.lock = threading.Lock()
         self.pairing_code = f"{secrets.randbelow(1_000_000):06d}"
         self.pairing_expires = time.time() + PAIRING_TTL_SECONDS
+        self.pair_attempts = 0
         self.tokens: set[str] = set()
         self.nonces: dict[str, float] = {}
 
     def pair(self, code: str) -> str:
         with self.lock:
-            if time.time() > self.pairing_expires or not secrets.compare_digest(code, self.pairing_code):
+            if self.pair_attempts >= MAX_PAIR_ATTEMPTS:
+                raise PermissionError("Too many pairing attempts. Restart the agent to generate a new code.")
+            if time.time() > self.pairing_expires:
+                raise PermissionError("The pairing code is invalid or expired.")
+            if not secrets.compare_digest(code, self.pairing_code):
+                self.pair_attempts += 1
+                if self.pair_attempts >= MAX_PAIR_ATTEMPTS:
+                    self.pairing_code = ""
                 raise PermissionError("The pairing code is invalid or expired.")
             token = secrets.token_urlsafe(32)
             self.tokens.add(hashlib.sha256(token.encode()).hexdigest())

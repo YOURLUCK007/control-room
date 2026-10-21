@@ -4,7 +4,7 @@ The mobile app talks directly to the Windows agent over the local network. The r
 
 ## Pairing
 
-1. The agent prints a six-digit code on startup. The code is valid for ten minutes and one successful pairing.
+1. The agent prints a six-digit code on startup. The code is valid for ten minutes, allows at most five failed attempts, and one successful pairing.
 2. The phone sends `POST /pair`:
 
 ```json
@@ -21,7 +21,7 @@ The mobile app talks directly to the Windows agent over the local network. The r
 }
 ```
 
-The token is used only for this paired phone. Revoke the token by removing the device from the agent data directory or add a device-revocation UI before exposing the agent beyond a trusted LAN.
+The phone stores the token locally; the agent stores only its digest in memory. Restarting the agent revokes all active tokens. Removing a paired device only deletes the phone's saved token; it does not revoke the digest at the agent. Add per-device revocation before exposing the agent beyond a trusted LAN.
 
 ## Authenticated requests
 
@@ -44,9 +44,11 @@ The agent rejects timestamps outside a 30-second window and rejects reused nonce
 }
 ```
 
-The agent supports a fixed allowlist. It never executes a shell string received from the phone. `NATURAL_LANGUAGE` is accepted as a convenience action and maps only to deterministic allowlisted handlers.
+`NATURAL_LANGUAGE` maps only to deterministic supported handlers. `LIST_FILES`, `READ_FILE`, and `WRITE_FILE` provide scoped file browsing and text editing inside Desktop, Documents, and Downloads. Reads and writes are limited to UTF-8 text files no larger than 128 KB. Writes require `confirm: true`; overwriting a file creates an adjacent timestamped backup.
 
-Potentially disruptive actions return `requires_confirmation: true` unless `confirm` is explicitly true. The client must show a confirmation screen and resend the same intent with confirmation rather than silently confirming.
+`RUN_COMMAND` is a separate, deliberately powerful action. It runs the provided PowerShell command as the logged-in Windows user, requires `confirm: true`, accepts at most 1,200 characters, waits up to 20 seconds, and returns bounded stdout/stderr. It is not available through natural-language command parsing. Keep the agent on a trusted LAN and never port-forward it.
+
+Potentially disruptive actions return `requires_confirmation: true` unless `confirm` is explicitly true. The client must show the exact operation for confirmation rather than silently confirming it.
 
 ## Read-only endpoints
 

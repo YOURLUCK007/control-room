@@ -62,9 +62,9 @@ export function Telemetry({ icon, label, value, note, accent }: { icon: keyof ty
   return <Surface style={styles.telemetry}><Feather name={icon} size={17} color={accent ?? colors.primary} /><Text style={[styles.telemetryLabel, { color: colors.mutedForeground }]}>{label}</Text><Text style={[styles.telemetryValue, { color: colors.foreground }]}>{value}</Text><Text style={[styles.telemetryNote, { color: colors.mutedForeground }]}>{note}</Text></Surface>;
 }
 
-export function CommandInput({ value, onChangeText, onSubmit, placeholder = 'Ask your laptop to do something…' }: { value: string; onChangeText: (value: string) => void; onSubmit: () => void; placeholder?: string }) {
+export function CommandInput({ value, onChangeText, onSubmit, onVoicePress, voiceListening = false, placeholder = 'Ask your laptop to do something…' }: { value: string; onChangeText: (value: string) => void; onSubmit: () => void; onVoicePress?: () => void; voiceListening?: boolean; placeholder?: string }) {
   const colors = useColors();
-  return <View style={[styles.commandBox, { backgroundColor: colors.surface, borderColor: colors.border }]}><Feather name="terminal" size={18} color={colors.primary} /><TextInput testID="command-input" value={value} onChangeText={onChangeText} onSubmitEditing={onSubmit} placeholder={placeholder} placeholderTextColor={colors.mutedForeground} returnKeyType="send" style={[styles.commandText, { color: colors.foreground }]} multiline maxLength={240} /><Pressable accessibilityLabel="Queue command" testID="queue-command" onPress={onSubmit} style={({ pressed }) => [styles.sendButton, { backgroundColor: colors.primary, opacity: pressed ? 0.68 : 1 }]}><Feather name="arrow-up" size={18} color={colors.primaryForeground} /></Pressable></View>;
+  return <View style={[styles.commandBox, { backgroundColor: colors.surface, borderColor: colors.border }]}><Feather name="terminal" size={18} color={colors.primary} /><TextInput testID="command-input" value={value} onChangeText={onChangeText} onSubmitEditing={onSubmit} placeholder={placeholder} placeholderTextColor={colors.mutedForeground} returnKeyType="send" style={[styles.commandText, { color: colors.foreground }]} multiline maxLength={2000} /><Pressable accessibilityLabel={voiceListening ? 'Stop voice input' : 'Use voice input'} testID="voice-command" onPress={onVoicePress} style={({ pressed }) => [styles.voiceButton, { backgroundColor: voiceListening ? colors.accent : colors.surfaceRaised, borderColor: colors.border, opacity: pressed ? 0.68 : 1 }]}><Feather name={voiceListening ? 'mic-off' : 'mic'} size={17} color={colors.primary} /></Pressable><Pressable accessibilityLabel="Queue command" testID="queue-command" onPress={onSubmit} style={({ pressed }) => [styles.sendButton, { backgroundColor: colors.primary, opacity: pressed ? 0.68 : 1 }]}><Feather name="arrow-up" size={18} color={colors.primaryForeground} /></Pressable></View>;
 }
 
 export const styles = StyleSheet.create({
@@ -89,5 +89,6 @@ export const styles = StyleSheet.create({
   telemetryNote: { fontSize: 10, fontFamily: 'Inter_400Regular', marginTop: 3 },
   commandBox: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 62, paddingHorizontal: 14, borderRadius: 18, borderWidth: 1 },
   commandText: { flex: 1, fontSize: 14, fontFamily: 'Inter_400Regular', minHeight: 36, maxHeight: 72, paddingTop: 8, paddingBottom: 8 },
+  voiceButton: { width: 36, height: 36, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   sendButton: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
 });

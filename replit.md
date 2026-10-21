@@ -31,15 +31,24 @@ The first build is local-first. The client persists paired devices, tokens, sett
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- Mobile app routes and UI: `artifacts/phone-laptop-remote/app/`
+- Local device state and command history: `artifacts/phone-laptop-remote/context/RemoteContext.tsx`
+- LAN protocol client: `artifacts/phone-laptop-remote/lib/agentClient.ts`
+- Windows security boundary and action handlers: `windows-agent/agent.py`
+- Agent protocol and safety tests: `tests/test_agent.py`
+- Product and security instructions: `README.md` and `docs/`
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Mobile-to-PC traffic goes directly over the LAN; there is no relay or account backend in this feature.
+- Pairing uses a one-time code. Agent token hashes and replay nonces are held in memory, so restarting the agent invalidates existing phone pairings.
+- Natural-language commands map only to specific handlers. Arbitrary PowerShell exists only on a separate terminal screen and always needs per-command confirmation.
+- The file browser/editor is limited to Desktop, Documents, and Downloads; edits are UTF-8 text up to 128 KB and overwrites keep an adjacent backup.
+- Pairing allows five wrong codes before a restart is required. Local-only mode blocks non-LAN hosts; when disabled, a non-local host must use HTTPS.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+Laptop Remote pairs an Android phone to a Windows agent for launching apps/files, opening common folders, reading system status, and performing confirmed power actions. The phone also has a scoped text-file editor and a confirmed PowerShell terminal. Native voice entry uses the phone keyboard dictation; browser voice input is optional and browser-provider controlled.
 
 ## User preferences
 
@@ -47,7 +56,10 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Do not route natural-language text into a shell. Keep `RUN_COMMAND` separate, explicitly confirmed, bounded to 20 seconds, and clearly described as full access to the logged-in Windows account.
+- A fully shut-down laptop cannot answer the agent; wake-on-LAN is not implemented.
+- Expo Go does not include a native speech-recognition module. Do not add a native speech package without rebuilding the Expo dependency/lockfile and verifying the development build.
+- Python tests exercise the agent on this platform; Windows API actions and LAN pairing still require manual testing on an actual Windows laptop and phone.
 
 ## Pointers
 

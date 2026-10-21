@@ -2,9 +2,9 @@
 
 ## Components
 
-### Android client
+### Mobile client
 
-The Expo Router app in `artifacts/phone-laptop-remote` provides the control-room dashboard, pairing flow, device list, history, and safety settings. `RemoteContext` is the local source of truth and persists state with AsyncStorage. It uses a direct LAN client for `/pair` and authenticated `/command` requests.
+The Expo Router app in `artifacts/phone-laptop-remote` provides the control-room dashboard, pairing flow, device list, history, safety settings, a scoped file browser/editor, and a confirmed remote PowerShell terminal. `RemoteContext` is the local source of truth and persists paired devices, tokens, settings, and command history with AsyncStorage. It uses a direct LAN client for `/pair` and authenticated `/command` requests. Browser speech recognition is optional; native users can dictate through their phone keyboard.
 
 The client is intentionally usable before a laptop is paired. Commands entered while offline are saved as local records with an offline result; the UI does not claim that a Windows action occurred.
 
@@ -17,7 +17,7 @@ The client is intentionally usable before a laptop is paired. Commands entered w
 - `POST /telemetry` for authenticated system information
 - `POST /command` for authenticated allowlisted actions
 
-The agent owns the operating-system boundary. Natural-language text is accepted only as input to a deterministic interpreter that maps it to an allowlisted action. It never evaluates a shell string from the client.
+The agent owns the operating-system boundary. Natural-language text is accepted only as input to a deterministic interpreter that maps it to supported actions. File operations are restricted to Desktop, Documents, and Downloads; phone-side text edits need explicit confirmation and preserve an adjacent backup. A separate `RUN_COMMAND` protocol action accepts a PowerShell command only after explicit confirmation, bounds command size, execution wait, and output, and runs as the logged-in Windows user.
 
 ### State and transport
 
@@ -29,4 +29,5 @@ The first build uses direct LAN HTTP(S) instead of a public relay or hosted back
 - DNS-SD/mDNS discovery with manual-host fallback
 - Secure certificate pinning for the mobile client
 - Screen capture and remote input as separately permissioned capabilities
+- Wake-on-LAN support for devices configured to wake while powered off
 - A shared typed protocol package once the wire format stabilizes

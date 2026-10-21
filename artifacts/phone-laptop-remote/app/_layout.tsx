@@ -26,6 +26,8 @@ function RootLayoutNav() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="devices" options={{ presentation: 'card' }} />
       <Stack.Screen name="history" options={{ presentation: 'card' }} />
+      <Stack.Screen name="files" options={{ presentation: 'card' }} />
+      <Stack.Screen name="terminal" options={{ presentation: 'card' }} />
       <Stack.Screen name="settings" options={{ presentation: 'card' }} />
       <Stack.Screen name="pair" options={{ presentation: 'modal' }} />
     </Stack>

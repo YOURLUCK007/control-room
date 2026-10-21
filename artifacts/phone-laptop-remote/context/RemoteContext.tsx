@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { pairWithAgent, sendNaturalLanguageCommand } from '@/lib/agentClient';
+import { AgentCommandResult, pairWithAgent, sendNaturalLanguageCommand } from '@/lib/agentClient';
 
 export type Laptop = {
   id: string;
@@ -18,7 +18,14 @@ export type CommandRecord = {
   id: string;
   text: string;
   createdAt: string;
-  result: 'queued' | 'offline' | 'sent';
+  result: 'queued' | 'offline' | 'sent' | 'failed' | 'confirmation';
+};
+
+export type CommandSubmission = {
+  result: CommandRecord['result'];
+  message: string;
+  requires_confirmation?: boolean;
+  data?: Record<string, unknown>;
 };
 
 export type Settings = {
@@ -42,33 +49,16 @@ type RemoteContextValue = RemoteState & {
   updateLaptop: (id: string, patch: Partial<Pick<Laptop, 'name' | 'host' | 'os'>>) => Promise<void>;
   removeLaptop: (id: string) => Promise<void>;
   selectLaptop: (id: string) => Promise<void>;
-  queueCommand: (text: string, confirm?: boolean) => Promise<CommandRecord['result']>;
+  queueCommand: (text: string, confirm?: boolean) => Promise<CommandSubmission>;
   clearHistory: () => Promise<void>;
   updateSettings: (patch: Partial<Settings>) => Promise<void>;
 };
 
 const STORAGE_KEY = 'laptop-remote.local.v1';
 const initialState: RemoteState = {
-  laptops: [
-    {
-      id: 'luna-office',
-      name: 'Luna office',
-      host: 'LUNA-OFFICE',
-      port: 8765,
-      lastSeen: 'Not connected yet',
-      status: 'offline',
-      os: 'Windows 11',
-    },
-  ],
-  selectedLaptopId: 'luna-office',
-  commands: [
-    {
-      id: 'welcome',
-      text: 'Show my desktop',
-      createdAt: new Date(Date.now() - 1000 * 60 * 28).toISOString(),
-      result: 'offline',
-    },
-  ],
+  laptops: [],
+  selectedLaptopId: null,
+  commands: [],
   settings: {
     confirmCommands: true,
     biometricLock: false,
@@ -93,10 +83,20 @@ export function RemoteProvider({ children }: { children: React.ReactNode }) {
         if (saved && active) {
           try {
             const parsed = JSON.parse(saved) as Partial<RemoteState>;
+            const laptops = (parsed.laptops ?? initialState.laptops)
+              .filter((laptop) => !(laptop.id === 'luna-office' && !laptop.token))
+              .map((laptop) => ({ ...laptop, port: laptop.port ?? 8765 }));
+            const commands = (parsed.commands ?? initialState.commands)
+              .filter((item) => item.id !== 'welcome');
+            const selectedLaptopId = laptops.some((laptop) => laptop.id === parsed.selectedLaptopId)
+              ? parsed.selectedLaptopId ?? null
+              : laptops[0]?.id ?? null;
             setState({
               ...initialState,
               ...parsed,
-              laptops: (parsed.laptops ?? initialState.laptops).map((laptop) => ({ ...laptop, port: laptop.port ?? 8765 })),
+              laptops,
+              commands,
+              selectedLaptopId,
             });
           } catch {
             setState(initialState);
@@ -126,7 +126,7 @@ export function RemoteProvider({ children }: { children: React.ReactNode }) {
 
   const pairLaptop = useCallback(async (details: { name: string; host: string; port: number; code: string; os: string }) => {
     try {
-      const result = await pairWithAgent(details.host, details.port, details.code);
+      const result = await pairWithAgent(details.host, details.port, details.code, state.settings.localOnly);
       if (!result.success || !result.access_token) return result.message ?? 'The agent rejected this pairing code.';
       const laptop: Laptop = {
         id: result.computer?.id ?? makeId(),
@@ -170,20 +170,24 @@ export function RemoteProvider({ children }: { children: React.ReactNode }) {
 
   const queueCommand = useCallback(async (text: string, confirm = false) => {
     const trimmed = text.trim();
-    if (!trimmed) return 'offline' as const;
+    if (!trimmed) return { result: 'failed', message: 'Enter a command first.' };
     let result: CommandRecord['result'] = 'offline';
+    let response: AgentCommandResult | undefined;
+    let message = 'Laptop agent is offline. This command was saved only in local history.';
     if (selectedLaptop?.token) {
       try {
-        const response = await sendNaturalLanguageCommand(selectedLaptop.host, selectedLaptop.port, selectedLaptop.token, trimmed, confirm);
-        result = response.success ? 'sent' : 'queued';
-      } catch {
+        response = await sendNaturalLanguageCommand(selectedLaptop.host, selectedLaptop.port, selectedLaptop.token, trimmed, confirm, state.settings.localOnly);
+        result = response.success ? 'sent' : response.requires_confirmation ? 'confirmation' : 'failed';
+        message = response.message;
+      } catch (error) {
         result = 'offline';
+        message = error instanceof Error ? error.message : 'The laptop could not be reached. Nothing was run.';
       }
     }
     const record: CommandRecord = { id: makeId(), text: trimmed, createdAt: new Date().toISOString(), result };
     await persist({ ...state, commands: [record, ...state.commands].slice(0, 50) });
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    return result;
+    return { result, message, requires_confirmation: response?.requires_confirmation, data: response?.data };
   }, [persist, selectedLaptop, state]);
 
   const clearHistory = useCallback(async () => {
