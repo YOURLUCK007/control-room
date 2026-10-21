@@ -19,6 +19,8 @@ The project is an Expo app. Use the managed preview workflow from Replit, or run
 pnpm --filter @workspace/phone-laptop-remote run dev
 ```
 
+If Expo Go loses the live-update connection on a restricted network, stop the managed preview workflow and use the tunnel fallback described in `docs/troubleshooting.md`. Do not run both Expo servers at once.
+
 Preview the existing app with Expo Go using the QR action in the mobile preview. Expo Go does not include the native speech-recognition module. For the in-app microphone and spoken replies, install dependencies and build a custom Expo development app:
 
 ```bash
