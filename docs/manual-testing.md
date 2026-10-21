@@ -16,7 +16,9 @@
 - [ ] Try to browse outside the three allowed folders and confirm the agent rejects the path.
 - [ ] Run a read-only PowerShell command in Terminal, cancel a second command at the confirmation prompt, then run a harmless command and verify its output.
 - [ ] Confirm PowerShell commands over 1,200 characters are rejected and commands that exceed the time limit return a timeout.
-- [ ] Use the browser voice button where Web Speech API is available; review the disclosure and transcript before sending. In Expo Go, try the phone keyboard's dictation control.
+- [ ] In a custom Android development build, grant microphone/speech permissions, dictate a command, and confirm the transcript remains editable before sending.
+- [ ] Confirm speech alone never sends a command, sensitive operations still show confirmation, and the phone speaks the final status after a voice-originated command.
+- [ ] In Expo Go, confirm keyboard dictation remains available for basic testing; the native mic feature requires the custom development build.
 - [ ] Search, repeat, and clear command history.
 - [ ] Toggle confirmation, device unlock, and local-only settings.
 - [ ] Remove a paired device and confirm it is no longer selected.

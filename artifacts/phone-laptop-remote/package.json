@@ -9,6 +9,10 @@
     "serve": "node server/serve.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
+  "dependencies": {
+    "expo-speech": "~57.0.3",
+    "expo-speech-recognition": "57.1.1"
+  },
   "devDependencies": {
     "@babel/core": "^7.25.2",
     "@expo-google-fonts/inter": "^0.4.0",

@@ -22,7 +22,8 @@ Delete, file writes, sleep, restart, shutdown, process-control, and terminal act
 - The phone editor handles UTF-8 text only and caps files at 128 KB. Existing files are copied to a timestamped backup before an atomic save.
 - PowerShell runs without a profile, from the user's home folder, with a 20-second timeout and bounded output. Commands can still change or delete anything the logged-in Windows user can access.
 - Do not use the terminal with untrusted users or devices. Do not expose the agent's port to the public internet.
-- The browser's optional Web Speech API may send audio to the browser's recognition provider. Native Expo Go uses the phone keyboard's dictation; review transcribed text before sending.
+- The phone's configured speech-recognition service may process audio. Voice transcripts remain in the command field and are not sent to the laptop until the user reviews them and taps send. The app uses press-to-talk, not an always-listening microphone.
+- Native speech recognition requires a custom Expo development build; Expo Go does not bundle the native module. Expo Go users can use the phone keyboard's dictation instead.
 - Local-only mode is enabled by default and blocks non-private addresses. Disabling it does not create a secure tunnel; non-local hosts must use HTTPS, and the agent should remain behind a private VPN or LAN firewall.
 
 ## Deployment guidance

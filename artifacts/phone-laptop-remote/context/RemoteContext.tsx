@@ -168,7 +168,7 @@ export function RemoteProvider({ children }: { children: React.ReactNode }) {
 
   const selectedLaptop = state.laptops.find((item) => item.id === state.selectedLaptopId) ?? null;
 
-  const queueCommand = useCallback(async (text: string, confirm = false) => {
+  const queueCommand = useCallback(async (text: string, confirm = false): Promise<CommandSubmission> => {
     const trimmed = text.trim();
     if (!trimmed) return { result: 'failed', message: 'Enter a command first.' };
     let result: CommandRecord['result'] = 'offline';

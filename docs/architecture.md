@@ -4,7 +4,7 @@
 
 ### Mobile client
 
-The Expo Router app in `artifacts/phone-laptop-remote` provides the control-room dashboard, pairing flow, device list, history, safety settings, a scoped file browser/editor, and a confirmed remote PowerShell terminal. `RemoteContext` is the local source of truth and persists paired devices, tokens, settings, and command history with AsyncStorage. It uses a direct LAN client for `/pair` and authenticated `/command` requests. Browser speech recognition is optional; native users can dictate through their phone keyboard.
+The Expo Router app in `artifacts/phone-laptop-remote` provides the control-room dashboard, pairing flow, device list, history, safety settings, a scoped file browser/editor, and a confirmed remote PowerShell terminal. `RemoteContext` is the local source of truth and persists paired devices, tokens, settings, and command history with AsyncStorage. It uses a direct LAN client for `/pair` and authenticated `/command` requests. Press-to-talk speech recognition populates the command field for review; `expo-speech` reads back the response after a voice-originated command. Native recognition requires a custom development build, while Expo Go can use keyboard dictation.
 
 The client is intentionally usable before a laptop is paired. Commands entered while offline are saved as local records with an offline result; the UI does not claim that a Windows action occurred.
 

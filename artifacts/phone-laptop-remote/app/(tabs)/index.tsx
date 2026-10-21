@@ -2,6 +2,7 @@ import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import * as Speech from 'expo-speech';
 import { useColors } from '@/hooks/useColors';
 import { useRemote } from '@/context/RemoteContext';
 import { CommandInput, Header, IconButton, Screen, SectionTitle, StatusPill, Surface, Telemetry } from '@/components/RemoteUI';
@@ -14,21 +15,7 @@ type SystemSnapshot = {
   uptime_seconds?: number;
 };
 
-type SpeechRecognizer = {
-  lang: string;
-  interimResults: boolean;
-  maxAlternatives: number;
-  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-  onerror: (() => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-  stop: () => void;
-};
-
-type SpeechRuntime = typeof globalThis & {
-  SpeechRecognition?: new () => SpeechRecognizer;
-  webkitSpeechRecognition?: new () => SpeechRecognizer;
-};
+type SpeechRecognitionPackage = typeof import('expo-speech-recognition');
 
 const quickActions: { icon: keyof typeof Feather.glyphMap; label: string; command?: string; route?: '/files' | '/terminal'; detail: string }[] = [
   { icon: 'folder', label: 'Files', route: '/files', detail: 'Browse and edit text files' },
@@ -68,10 +55,45 @@ export default function Dashboard() {
   const [voiceListening, setVoiceListening] = useState(false);
   const [agentOnline, setAgentOnline] = useState(false);
   const [system, setSystem] = useState<SystemSnapshot | null>(null);
-  const speechRef = useRef<SpeechRecognizer | null>(null);
+  const [nativeVoiceAvailable, setNativeVoiceAvailable] = useState<boolean | null>(null);
+  const voiceSubmissionRef = useRef(false);
+  const speechRecognitionRef = useRef<SpeechRecognitionPackage | null>(null);
 
-  useEffect(() => () => {
-    speechRef.current?.stop();
+  useEffect(() => {
+    let active = true;
+    let listeners: { remove: () => void }[] = [];
+    void import('expo-speech-recognition').then((module) => {
+      if (!active) return;
+      speechRecognitionRef.current = module;
+      setNativeVoiceAvailable(true);
+      const speech = module.ExpoSpeechRecognitionModule;
+      listeners = [
+        speech.addListener('start', () => setVoiceListening(true)),
+        speech.addListener('end', () => setVoiceListening(false)),
+        speech.addListener('result', (event) => {
+          const transcript = event.results[0]?.transcript?.trim();
+          if (!transcript) return;
+          voiceSubmissionRef.current = true;
+          setCommand(transcript);
+          setQueuedMessage('Transcript ready. Review it, then tap send.');
+        }),
+        speech.addListener('error', (event) => {
+          setVoiceListening(false);
+          voiceSubmissionRef.current = false;
+          setQueuedMessage(event.message || 'Voice input stopped. Check microphone permission and try again.');
+        }),
+      ];
+    }).catch(() => {
+      // Expo Go does not include this native module; keyboard dictation remains available.
+      if (active) setNativeVoiceAvailable(false);
+    });
+    return () => {
+      active = false;
+      listeners.forEach((listener) => listener.remove());
+      speechRecognitionRef.current?.ExpoSpeechRecognitionModule.abort();
+      speechRecognitionRef.current = null;
+      void Speech.stop();
+    };
   }, []);
 
   useEffect(() => {
@@ -129,6 +151,12 @@ export default function Dashboard() {
       : '';
     setQueuedMessage([response.message, details].filter(Boolean).join(' · ').slice(0, 500));
     setCommand('');
+    if (voiceSubmissionRef.current) {
+      voiceSubmissionRef.current = false;
+      void Speech.stop()
+        .catch(() => undefined)
+        .then(() => Speech.speak(response.message.slice(0, 240), { language: 'en-US', rate: 0.95 }));
+    }
   };
 
   const submit = async () => {
@@ -142,49 +170,49 @@ export default function Dashboard() {
     await sendCommand(nextCommand);
   };
 
+  const startVoiceRecognition = async () => {
+    try {
+      const speech = speechRecognitionRef.current?.ExpoSpeechRecognitionModule;
+      if (!speech) {
+        if (nativeVoiceAvailable === null) {
+          setQueuedMessage('Voice input is still loading. Try the mic again in a moment.');
+        } else {
+          showUserMessage('Native voice input unavailable', 'This build does not include the native speech module. In Expo Go, tap the command field and use your phone keyboard microphone. For the in-app mic, install a custom development build.');
+        }
+        return;
+      }
+      const permission = await speech.requestPermissionsAsync();
+      if (!permission.granted) {
+        setQueuedMessage('Microphone or speech-recognition permission was denied. Enable it in your phone settings to use voice input.');
+        return;
+      }
+      voiceSubmissionRef.current = false;
+      setCommand('');
+      setQueuedMessage('Listening…');
+      await Speech.stop();
+      speech.start({
+        lang: 'en-US',
+        interimResults: false,
+        continuous: false,
+        maxAlternatives: 1,
+      });
+    } catch {
+      setVoiceListening(false);
+      setQueuedMessage('Could not start voice input. Check microphone permission and your phone’s speech-recognition service.');
+    }
+  };
+
   const toggleVoice = () => {
     if (voiceListening) {
-      speechRef.current?.stop();
+      speechRecognitionRef.current?.ExpoSpeechRecognitionModule.stop();
       return;
     }
-    const runtime = globalThis as SpeechRuntime;
-    const Recognition = runtime.SpeechRecognition ?? runtime.webkitSpeechRecognition;
-    if (!Recognition) {
-      showUserMessage('Voice typing', 'Tap the command field and use the microphone on your phone keyboard to dictate. Your keyboard’s speech provider may process the audio; the transcript stays in the field until you tap send.');
-      return;
-    }
-    const startListening = () => {
-      const recognition = new Recognition();
-      recognition.lang = 'en-US';
-      recognition.interimResults = false;
-      recognition.maxAlternatives = 1;
-      recognition.onresult = (event) => {
-        const transcript = event.results[0]?.[0]?.transcript?.trim();
-        if (transcript) {
-          setCommand(transcript);
-          setQueuedMessage('Voice transcription ready. Review it before sending.');
-        }
-      };
-      recognition.onerror = () => {
-        setVoiceListening(false);
-        setQueuedMessage('Voice input stopped. Check microphone permission or use your phone keyboard dictation.');
-      };
-      recognition.onend = () => {
-        setVoiceListening(false);
-        speechRef.current = null;
-      };
-      speechRef.current = recognition;
-      setVoiceListening(true);
-      setQueuedMessage('Listening…');
-      try {
-        recognition.start();
-      } catch {
-        setVoiceListening(false);
-        speechRef.current = null;
-        setQueuedMessage('Could not start voice input. Check microphone permission.');
-      }
-    };
-    confirmUserAction('Start voice input?', 'Your browser’s speech service may process the audio. The transcript stays here; nothing is sent to the laptop until you review it and tap send.', 'Start listening', startListening);
+    confirmUserAction(
+      'Start voice input?',
+      'Your phone’s speech-recognition service may process the audio. The transcript stays in this app; nothing is sent to the laptop until you review it and tap send.',
+      'Start listening',
+      () => { void startVoiceRecognition(); },
+    );
   };
 
   return (
@@ -201,7 +229,7 @@ export default function Dashboard() {
       <SectionTitle title="Command" action="History" onAction={() => router.push('/history')} />
       <CommandInput value={command} onChangeText={setCommand} onSubmit={submit} onVoicePress={toggleVoice} voiceListening={voiceListening} />
       {queuedMessage ? <View style={styles.inlineFeedback}><Feather name="check-circle" size={14} color={colors.success} /><Text style={[styles.feedbackText, { color: colors.success }]}>{queuedMessage}</Text></View> : null}
-      <Text style={[styles.commandHint, { color: colors.mutedForeground }]}>Commands are sent directly to your paired laptop on the local network. If it is offline, they remain in local history; tap Repeat after reconnecting. Use your keyboard’s mic for voice dictation in the native app.</Text>
+      <Text style={[styles.commandHint, { color: colors.mutedForeground }]}>Tap the mic, speak, review the transcript, then tap send. The phone reads the laptop’s reply aloud. Voice actions still use the same supported commands and confirmations; nothing runs from speech alone.</Text>
 
       <SectionTitle title="Quick actions" />
       <View style={styles.quickGrid}>{quickActions.map((item) => <QuickAction key={item.label} item={item} onPress={() => item.route ? router.push(item.route) : setCommand(item.command ?? '')} />)}</View>

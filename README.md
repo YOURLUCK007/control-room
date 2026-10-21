@@ -19,7 +19,16 @@ The project is an Expo app. Use the managed preview workflow from Replit, or run
 pnpm --filter @workspace/phone-laptop-remote run dev
 ```
 
-Preview it with Expo Go using the QR action in the mobile preview. To pair a laptop, run the Windows agent and use the host, port, and one-time code shown by the agent. On native phones, dictate into the command box using the phone keyboard's microphone. The browser mic button is available only where the browser implements the Web Speech API; review its transcript before sending.
+Preview the existing app with Expo Go using the QR action in the mobile preview. Expo Go does not include the native speech-recognition module. For the in-app microphone and spoken replies, install dependencies and build a custom Expo development app:
+
+```bash
+pnpm install
+pnpm --filter @workspace/phone-laptop-remote exec expo run:android
+```
+
+The local Android build requires Android Studio/SDK and a connected phone or emulator. The mic requests phone permission; the phone's configured speech-recognition service may process audio. The app puts the transcript in the command field for review and sends nothing to the laptop until you tap send. It speaks the resulting status on the phone. This is press-to-talk, not an always-listening wake-word service. Expo Go can still use keyboard dictation for basic testing.
+
+To pair a laptop, keep the phone and PC on the same trusted private Wi-Fi network, start the Windows agent, and enter its LAN address, port, and one-time code in Devices. Do not port-forward the agent or expose it to the public internet.
 
 ## Run the Windows agent
 
@@ -58,7 +67,7 @@ python -m py_compile windows-agent/agent.py
 python -m unittest discover -s tests -p 'test_*.py'
 ```
 
-The mobile app has no dedicated native speech-recognition dependency; in Expo Go, native voice entry uses the phone keyboard's own dictation feature. Browser speech recognition may use the browser vendor's speech service.
+Native speech recognition requires a custom development build; Expo Go users can use the phone keyboard's dictation instead. Check the manual-testing list for the phone voice flow.
 
 See:
 
