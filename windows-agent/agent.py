@@ -89,7 +89,11 @@ def safe_name(value: Any, field: str) -> str:
 
 
 def resolve_user_path(value: Any) -> Path:
-    requested = Path(safe_name(value, "path")).expanduser().resolve()
+    # Paths are checked by their resolved location, not the 240-character name
+    # limit used for short user-supplied labels.
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("path must be a non-empty string")
+    requested = Path(value.strip()).expanduser().resolve()
     allowed = [root.resolve() for root in ROOTS if root.exists()]
     if not any(requested == root or root in requested.parents for root in allowed):
         raise PermissionError("The agent only permits Desktop, Documents, and Downloads.")
@@ -110,21 +114,65 @@ def resolve_folder(value: Any) -> Path:
     return resolve_user_path(value)
 
 
+DISCOVERY_TIME_BUDGET_SECONDS = 1.5
+DISCOVERY_MAX_ENTRIES = 4_000
+DISCOVERY_MAX_DEPTH = 4
+# Folders that never hold user documents worth searching and can be enormous.
+DISCOVERY_SKIP_DIRECTORIES = {
+    "node_modules", ".git", ".cache", "$recycle.bin", "system volume information",
+    "appdata", "windows", "program files", "program files (x86)",
+}
+
+
+def iter_entries(root: Path, deadline: float, skip_directories: set[str] | None = None):
+    """Depth- and time-bounded file walk.
+
+    A Downloads or Documents folder can contain hundreds of thousands of files;
+    an unbounded scan would stall the request far past the phone's timeout.
+    """
+    stack: list[tuple[Path, int]] = [(root, 0)]
+    inspected = 0
+    while stack:
+        current, depth = stack.pop()
+        if time.monotonic() > deadline or inspected >= DISCOVERY_MAX_ENTRIES:
+            return
+        try:
+            with os.scandir(current) as items:
+                for item in items:
+                    inspected += 1
+                    if inspected >= DISCOVERY_MAX_ENTRIES or time.monotonic() > deadline:
+                        return
+                    try:
+                        is_directory = item.is_dir(follow_symlinks=False)
+                    except OSError:
+                        continue
+                    if is_directory:
+                        if depth < DISCOVERY_MAX_DEPTH and item.name.casefold() not in (skip_directories or set()):
+                            stack.append((Path(item.path), depth + 1))
+                    else:
+                        yield Path(item.path)
+        except OSError:
+            continue
+
+
 def discover_file(name: str) -> list[Path]:
     needle = name.casefold()
     matches: list[Path] = []
+    deadline = time.monotonic() + DISCOVERY_TIME_BUDGET_SECONDS
     for root in ROOTS:
-        if not root.exists():
+        if not root.exists() or len(matches) >= 50 or time.monotonic() > deadline:
             continue
-        for path in root.rglob("*"):
-            if len(matches) >= 50:
-                return matches
+        for path in iter_entries(root, deadline, DISCOVERY_SKIP_DIRECTORIES):
+            if needle not in path.name.casefold():
+                continue
             try:
                 safe_path = resolve_user_path(str(path))
-            except (OSError, PermissionError):
+            except (OSError, PermissionError, ValueError):
                 continue
             if safe_path.name.casefold() == needle or needle in safe_path.name.casefold():
                 matches.append(safe_path)
+                if len(matches) >= 50:
+                    return matches
     return matches
 
 
@@ -137,19 +185,19 @@ def discover_application(name: str) -> Path | None:
         Path(os.environ.get("PROGRAMFILES", "")),
         Path(os.environ.get("PROGRAMFILES(X86)", "")),
     ]
-    candidates: list[Path] = []
+    best: Path | None = None
+    best_key: tuple[bool, int] | None = None
+    deadline = time.monotonic() + DISCOVERY_TIME_BUDGET_SECONDS
     for root in search_roots:
-        if not root or not root.exists():
+        if not root or not root.exists() or time.monotonic() > deadline:
             continue
-        try:
-            candidates.extend(
-                path
-                for path in root.rglob("*")
-                if needle in path.stem.casefold() and path.suffix.casefold() in {".exe", ".lnk"}
-            )
-        except OSError:
-            continue
-    return sorted(candidates, key=lambda path: (path.suffix != ".lnk", len(str(path))))[0] if candidates else None
+        for path in iter_entries(root, deadline):
+            if path.suffix.casefold() not in {".exe", ".lnk"} or needle not in path.stem.casefold():
+                continue
+            key = (path.suffix != ".lnk", len(str(path)))
+            if best_key is None or key < best_key:
+                best, best_key = path, key
+    return best
 
 
 def open_path(path: Path) -> str:

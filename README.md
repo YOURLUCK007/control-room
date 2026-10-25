@@ -50,6 +50,8 @@ The agent prints a one-time six-digit pairing code. Enter the laptop host, port,
 
 ## What the phone can do
 
+The app is organised into four tabs: Home (status, quick actions, command box), Files (scoped text editor), Terminal (confirmed PowerShell), and Devices (pairing and live connection tests). The dashboard polls the agent every 15 seconds for CPU, memory, and uptime, and every paired computer can be checked on demand.
+
 - Open common Windows folders and launch files or installed applications.
 - Browse Desktop, Documents, and Downloads; read and edit UTF-8 text files up to 128 KB. Saving requires confirmation and keeps a timestamped backup beside an existing file.
 - Run PowerShell commands in a dedicated terminal. Every command requires an explicit confirmation, runs as the logged-in Windows user, is limited to 1,200 characters and a 20-second wait, and returns bounded output. This is powerful remote code execution: pair only your own phone, use TLS, and keep the agent private to your LAN.
@@ -57,7 +59,9 @@ The agent prints a one-time six-digit pairing code. Enter the laptop host, port,
 
 The dashboard does not support arbitrary natural-language shell execution. Full computer control is not possible when Windows is fully shut down: the agent must be running. Wake-on-LAN is not implemented.
 
-If you disable Local-only mode, the app requires `https://` for non-local hosts; it does not provide a relay or VPN. Prefer a private VPN and a valid TLS certificate rather than exposing the agent directly.
+The phone probes the agent over HTTPS first and falls back to plaintext on a private LAN, then remembers whichever protocol answered. If you disable Local-only mode, the app requires `https://` for non-local hosts; it does not provide a relay or VPN. Prefer a private VPN and a valid TLS certificate rather than exposing the agent directly.
+
+Browser previews cannot complete pairing because the agent does not send CORS headers. Use Expo Go or an Android build for a real connection.
 
 ## Checks
 

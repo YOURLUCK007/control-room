@@ -3,8 +3,11 @@
 ## Mobile client
 
 - [ ] Open the app in Expo Go and confirm the dashboard renders in light and dark system themes.
-- [ ] Open Devices, add a laptop with invalid details, and confirm validation appears without a crash.
+- [ ] Confirm the four tabs (Home, Files, Terminal, Devices) switch without losing the selected computer.
+- [ ] On Devices, add a laptop with invalid details, and confirm validation appears without a crash.
 - [ ] Start the agent with `--allow-insecure-dev`, enter the host, port, and printed code, and confirm the device becomes ONLINE.
+- [ ] Confirm pairing works against a TLS agent without typing `https://`, and that the saved device shows the protocol it used.
+- [ ] Pull to refresh on Home or Devices and confirm status, latency, and telemetry update.
 - [ ] Confirm Local-only mode accepts private LAN addresses/names and rejects public hosts; with it disabled, reject non-local HTTP and accept only a configured HTTPS endpoint.
 - [ ] Confirm the dashboard reports the actual agent connection and refreshes CPU, memory, and uptime while paired.
 - [ ] Open Command Prompt and Task Manager with quick actions and confirm each opens on Windows.
@@ -20,7 +23,7 @@
 - [ ] Confirm speech alone never sends a command, sensitive operations still show confirmation, and the phone speaks the final status after a voice-originated command.
 - [ ] In Expo Go, confirm keyboard dictation remains available for basic testing; the native mic feature requires the custom development build.
 - [ ] Search, repeat, and clear command history.
-- [ ] Toggle confirmation, device unlock, and local-only settings.
+- [ ] Toggle confirmation and local-only settings, then use "Check connection now" in Settings.
 - [ ] Remove a paired device and confirm it is no longer selected.
 
 ## Windows agent

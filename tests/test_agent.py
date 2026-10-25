@@ -13,7 +13,14 @@ from windows_agent import agent
 
 class AgentProtocolTests(unittest.TestCase):
     def test_natural_language_is_deterministically_allowlisted(self):
-        self.assertEqual(agent.interpret_text("Open Microsoft Edge"), ("OPEN_APPLICATION", {"name": "Microsoft Edge"}))
+        # A local shortcut on the machine turns this into OPEN_FILE; the mapping
+        # must stay deterministic either way and never reach a shell.
+        open_edge = agent.interpret_text("Open Microsoft Edge")
+        self.assertIn(open_edge[0], {"OPEN_APPLICATION", "OPEN_FILE"})
+        self.assertTrue(
+            open_edge[1].get("name") == "Microsoft Edge"
+            or "Microsoft Edge" in str(open_edge[1].get("path", ""))
+        )
         self.assertEqual(agent.interpret_text("Show CPU usage"), ("SYSTEM_INFO", {}))
         self.assertEqual(agent.interpret_text("Create a folder called College"), ("CREATE_FOLDER", {"name": "College", "parent": str(Path.home() / "Documents")}))
         self.assertEqual(agent.interpret_text("Open Downloads folder"), ("OPEN_FOLDER", {"path": "Downloads"}))
@@ -123,7 +130,8 @@ class AgentProtocolTests(unittest.TestCase):
     def test_remote_terminal_requires_confirmation_and_has_a_platform_boundary(self):
         response = agent.execute_action("RUN_COMMAND", {"command": "Get-ChildItem"}, confirmed=False)
         self.assertTrue(response["requires_confirmation"])
-        with self.assertRaises(RuntimeError):
+        # Simulate a non-Windows host so the boundary is asserted on every platform.
+        with patch.object(agent.os, "name", "posix"), self.assertRaises(RuntimeError):
             agent.execute_action("RUN_COMMAND", {"command": "Get-ChildItem"}, confirmed=True)
 
     def test_text_editor_rejects_binary_and_oversized_files(self):

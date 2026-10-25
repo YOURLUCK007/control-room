@@ -4,6 +4,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { ToastProvider } from '@/components/Toast';
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -13,6 +14,7 @@ import {
 } from '@expo-google-fonts/inter';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
 import { RemoteProvider } from '@/context/RemoteContext';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -22,12 +24,9 @@ const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   return (
-    <Stack screenOptions={{ headerShown: false, headerBackTitle: 'Back' }}>
+    <Stack screenOptions={{ headerShown: false, headerBackTitle: 'Back', contentStyle: { backgroundColor: '#0D1117' } }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="devices" options={{ presentation: 'card' }} />
       <Stack.Screen name="history" options={{ presentation: 'card' }} />
-      <Stack.Screen name="files" options={{ presentation: 'card' }} />
-      <Stack.Screen name="terminal" options={{ presentation: 'card' }} />
       <Stack.Screen name="settings" options={{ presentation: 'card' }} />
       <Stack.Screen name="pair" options={{ presentation: 'modal' }} />
     </Stack>
@@ -55,9 +54,12 @@ export default function RootLayout() {
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <RemoteProvider>
-            <GestureHandlerRootView>
+            <GestureHandlerRootView style={{ flex: 1 }}>
               <KeyboardProvider>
-                <RootLayoutNav />
+                <StatusBar style="light" />
+                <ToastProvider>
+                  <RootLayoutNav />
+                </ToastProvider>
               </KeyboardProvider>
             </GestureHandlerRootView>
           </RemoteProvider>

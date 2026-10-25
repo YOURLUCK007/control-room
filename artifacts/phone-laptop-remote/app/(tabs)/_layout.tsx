@@ -12,15 +12,22 @@ import { SymbolView } from 'expo-symbols';
 // NativeTabs intentionally does NOT use custom design tokens — liquid glass
 // is a system-level appearance provided by iOS and cannot be overridden.
 // Custom brand colors are applied only on the ClassicTabLayout path (older iOS / Android / web).
+const TABS = [
+  { name: 'index', title: 'Home', feather: 'home' as const, sf: { default: 'house', selected: 'house.fill' } },
+  { name: 'files', title: 'Files', feather: 'folder' as const, sf: { default: 'folder', selected: 'folder.fill' } },
+  { name: 'terminal', title: 'Terminal', feather: 'terminal' as const, sf: { default: 'terminal', selected: 'terminal.fill' } },
+  { name: 'devices', title: 'Devices', feather: 'monitor' as const, sf: { default: 'desktopcomputer', selected: 'desktopcomputer' } },
+] as const;
+
 function NativeTabLayout() {
   return (
     <NativeTabs>
-      <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.Icon
-          sf={{ default: 'house', selected: 'house.fill' }}
-        />
-        <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
+      {TABS.map((tab) => (
+        <NativeTabs.Trigger key={tab.name} name={tab.name}>
+          <NativeTabs.Trigger.Icon sf={tab.sf} />
+          <NativeTabs.Trigger.Label>{tab.title}</NativeTabs.Trigger.Label>
+        </NativeTabs.Trigger>
+      ))}
     </NativeTabs>
   );
 }
@@ -35,16 +42,17 @@ function ClassicTabLayout() {
   return (
     <Tabs
       screenOptions={{
+        headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.mutedForeground,
-        headerShown: false,
+        tabBarLabelStyle: { fontFamily: 'Inter_600SemiBold', fontSize: 10, letterSpacing: 0.2 },
         tabBarStyle: {
           position: 'absolute',
           backgroundColor: isIOS ? 'transparent' : colors.background,
-          borderTopWidth: isWeb ? 1 : 0,
+          borderTopWidth: 1,
           borderTopColor: colors.border,
           elevation: 0,
-          ...(isWeb ? { height: 84 } : {}),
+          ...(isWeb ? { height: 64, paddingTop: 6, paddingBottom: 6 } : {}),
         },
         tabBarBackground: () =>
           isIOS ? (
@@ -54,27 +62,25 @@ function ClassicTabLayout() {
               style={StyleSheet.absoluteFill}
             />
           ) : isWeb ? (
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                { backgroundColor: colors.background },
-              ]}
-            />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
           ) : null,
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="house" tintColor={color} size={24} />
-            ) : (
-              <Feather name="home" size={22} color={color} />
-            ),
-        }}
-      />
+      {TABS.map((tab) => (
+        <Tabs.Screen
+          key={tab.name}
+          name={tab.name}
+          options={{
+            title: tab.title,
+            tabBarIcon: ({ color }) =>
+              isIOS ? (
+                <SymbolView name={tab.sf.default as never} tintColor={color} size={23} />
+              ) : (
+                <Feather name={tab.feather} size={20} color={color} />
+              ),
+          }}
+        />
+      ))}
     </Tabs>
   );
 }
