@@ -1,0 +1,110 @@
+{
+  "id": "a16d87c8-4d99-4a97-a203-6a7d4ca7b108",
+  "createdAt": "2026-10-26T16:09:47.408Z",
+  "runtimeVersion": "exposdk:58.0.0",
+  "launchAsset": {
+    "key": "bundle-1793030987408-251184",
+    "contentType": "application/javascript",
+    "url": "https://localhost/1793030987408-251184/_expo/static/js/ios/bundle.js"
+  },
+  "assets": [],
+  "metadata": {},
+  "extra": {
+    "eas": {},
+    "expoClient": {
+      "name": "Laptop Remote",
+      "slug": "phone-laptop-remote",
+      "version": "1.0.0",
+      "orientation": "portrait",
+      "icon": "./assets/images/icon.png",
+      "scheme": "phone-laptop-remote",
+      "userInterfaceStyle": "automatic",
+      "splash": {
+        "backgroundColor": "#0D1117",
+        "resizeMode": "contain",
+        "image": "./assets/images/icon.png"
+      },
+      "ios": {
+        "supportsTablet": false,
+        "infoPlist": {
+          "NSSpeechRecognitionUsageDescription": "Allow Laptop Remote to recognize voice commands.",
+          "NSMicrophoneUsageDescription": "Allow Laptop Remote to use the microphone for voice commands."
+        }
+      },
+      "android": {
+        "permissions": [
+          "android.permission.RECORD_AUDIO"
+        ],
+        "package": "com.anonymous.phonelaptopremote"
+      },
+      "web": {
+        "favicon": "./assets/images/icon.png"
+      },
+      "plugins": [
+        "expo-router",
+        [
+          "expo-build-properties",
+          {
+            "android": {
+              "usesCleartextTraffic": true
+            }
+          }
+        ],
+        [
+          "expo-speech-recognition",
+          {
+            "microphonePermission": "Allow Laptop Remote to use the microphone for voice commands.",
+            "speechRecognitionPermission": "Allow Laptop Remote to recognize voice commands.",
+            "androidSpeechServicePackages": [
+              "com.google.android.googlequicksearchbox"
+            ]
+          }
+        ]
+      ],
+      "experiments": {
+        "typedRoutes": true,
+        "reactCompiler": true
+      },
+      "_internal": {
+        "isDebug": false,
+        "projectRoot": "C:\\Users\\SREEVIKUNTH\\Projects\\control-room\\artifacts\\phone-laptop-remote",
+        "dynamicConfigPath": {},
+        "staticConfigPath": "C:\\Users\\SREEVIKUNTH\\Projects\\control-room\\artifacts\\phone-laptop-remote\\app.json",
+        "packageJsonPath": "C:\\Users\\SREEVIKUNTH\\Projects\\control-room\\artifacts\\phone-laptop-remote\\package.json",
+        "pluginHistory": {
+          "expo-speech-recognition": {
+            "name": "expo-speech-recognition",
+            "version": "56.0.1"
+          }
+        }
+      },
+      "sdkVersion": "58.0.0",
+      "platforms": [
+        "ios",
+        "android",
+        "web"
+      ],
+      "extra": {
+        "router": {
+          "asyncRoutes": {
+            "web": true
+          }
+        }
+      },
+      "iconUrl": "http://127.0.0.1:8081/assets/assets/images/icon.png",
+      "hostUri": "localhost/ios"
+    },
+    "expoGo": {
+      "debuggerHost": "localhost/ios",
+      "developer": {
+        "tool": "expo-cli",
+        "projectRoot": "C:\\Users\\SREEVIKUNTH\\Projects\\control-room\\artifacts\\phone-laptop-remote"
+      },
+      "packagerOpts": {
+        "dev": false
+      },
+      "mainModuleName": "artifacts/phone-laptop-remote/node_modules/expo-router/entry"
+    },
+    "scopeKey": "@anonymous/phone-laptop-remote-748ab338-718c-41dd-a016-05a6e5e8e2f0"
+  }
+}
