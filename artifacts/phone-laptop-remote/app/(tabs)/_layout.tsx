@@ -74,7 +74,7 @@ function ClassicTabLayout() {
             title: tab.title,
             tabBarIcon: ({ color }) =>
               isIOS ? (
-                <SymbolView name={tab.sf.default as never} tintColor={color} size={23} />
+                <SymbolView name={tab.sf.default as never} tintColor={color as string} size={23} />
               ) : (
                 <Feather name={tab.feather} size={20} color={color} />
               ),
