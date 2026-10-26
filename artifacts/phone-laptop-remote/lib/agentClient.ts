@@ -47,7 +47,7 @@ export type AgentAction =
   | 'WRITE_FILE'
   | 'RUN_COMMAND';
 
-export type AgentFailureCode = 'blocked' | 'unreachable' | 'timeout' | 'invalid-response';
+export type AgentFailureCode = 'blocked' | 'unreachable' | 'timeout' | 'invalid-response' | 'tls' | 'cleartext';
 
 export class AgentError extends Error {
   code: AgentFailureCode;
@@ -132,6 +132,29 @@ type RequestOptions = {
   returnErrorBody?: boolean;
 };
 
+// Android, iOS, and web all phrase these differently; this catches every shape.
+const TLS_ERROR = /certificate|ssl|tls|handshake|trust anchor|CERT_|ERR_CERT|CertPathValidator|not trusted/i;
+const CLEARTEXT_ERROR = /cleartext/i;
+
+/**
+ * fetch hides the useful cause on some platforms (undici nests it in `cause`),
+ * so collect the whole chain before classifying the failure.
+ */
+function errorDetail(error: unknown): string {
+  const parts: string[] = [];
+  let current: unknown = error;
+  for (let depth = 0; depth < 4 && current; depth += 1) {
+    if (current instanceof Error) {
+      parts.push(current.message);
+      current = (current as Error & { cause?: unknown }).cause;
+    } else {
+      parts.push(String(current));
+      break;
+    }
+  }
+  return parts.join(' | ');
+}
+
 type AgentResponse<T> = {
   body: T;
   scheme: AgentScheme;
@@ -150,6 +173,7 @@ async function requestAgent<T>(
 ): Promise<AgentResponse<T>> {
   const protocols = protocolsFor(target);
   let lastError: unknown = null;
+  let transportError: AgentError | null = null;
 
   for (const scheme of protocols) {
     const url = agentUrl(target, scheme, path);
@@ -171,6 +195,18 @@ async function requestAgent<T>(
     } catch (error) {
       lastError = error;
       if (error instanceof AgentError) throw error;
+      const detail = errorDetail(error);
+      if (CLEARTEXT_ERROR.test(detail)) {
+        transportError = new AgentError(
+          'cleartext',
+          'Android blocked plaintext HTTP for this build. Start the agent with a TLS certificate, or use a development build that permits cleartext on a private network.',
+        );
+      } else if (scheme === 'https' && TLS_ERROR.test(detail)) {
+        transportError = new AgentError(
+          'tls',
+          'The agent’s TLS certificate is not trusted by this phone. Install the certificate on the device, or start the agent with --allow-insecure-dev on a trusted LAN and use its http:// address.',
+        );
+      }
       // Fall back to the other protocol only when this attempt never returned.
       if ((error as Error)?.name !== 'AbortError') continue;
     } finally {
@@ -179,15 +215,19 @@ async function requestAgent<T>(
   }
 
   if (lastError instanceof AgentError) throw lastError;
+  // A rejected certificate explains the failure better than the follow-up
+  // network error from the plaintext attempt.
+  if (transportError) throw transportError;
   if ((lastError as Error)?.name === 'AbortError') {
     throw new AgentError('timeout', `The laptop did not answer within ${Math.round(timeoutMs / 1000)} seconds. Make sure the agent is running and on the same network.`);
   }
-  const detail = (lastError as Error)?.message;
+  const detail = errorDetail(lastError);
+  const specific = detail && !/network request failed|failed to fetch|fetch failed|networkerror/i.test(detail);
   throw new AgentError(
     'unreachable',
-    detail && !/network request failed|failed to fetch|networkerror/i.test(detail)
+    specific
       ? detail
-      : 'Could not reach the laptop agent. Check that its window is still open, the address and port are right, and both devices share the same network.',
+      : `Could not reach the laptop agent over ${protocols.join(' and ').toUpperCase()}. Check that its window is still open, that you used the address the agent printed, and that Windows Firewall allows the port.${protocols.includes('https') ? ' If the agent runs with a TLS certificate, this phone may not trust it.' : ''}`,
   );
 }
 

@@ -13,20 +13,39 @@
       "image": "./assets/images/icon.png"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSSpeechRecognitionUsageDescription": "Allow Laptop Remote to recognize voice commands.",
+        "NSMicrophoneUsageDescription": "Allow Laptop Remote to use the microphone for voice commands."
+      }
     },
-    "android": {},
+    "android": {
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.anonymous.phonelaptopremote"
+    },
     "web": {
       "favicon": "./assets/images/icon.png"
     },
     "plugins": [
       "expo-router",
       [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ],
+      [
         "expo-speech-recognition",
         {
           "microphonePermission": "Allow Laptop Remote to use the microphone for voice commands.",
           "speechRecognitionPermission": "Allow Laptop Remote to recognize voice commands.",
-          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
         }
       ]
     ],

@@ -46,7 +46,7 @@ The insecure flag is intentionally explicit for a trusted development LAN. For n
 py agent.py --host 0.0.0.0 --cert .\certs\agent.crt --key .\certs\agent.key
 ```
 
-The agent prints a one-time six-digit pairing code. Enter the laptop host, port, and code in the Android app. Local-only mode is on by default and blocks public internet hosts. Keep the agent on the LAN; do not port-forward it. Five wrong pairing codes lock pairing until the agent restarts.
+The agent prints the LAN addresses the phone can use plus a one-time six-digit pairing code. Enter the address, port, and code in the Android app; prefer the printed IP address over the computer name, which phones often cannot resolve. The first run also needs a Windows Firewall exception for Python on private networks. Local-only mode is on by default and blocks public internet hosts. Keep the agent on the LAN; do not port-forward it. Five wrong pairing codes lock pairing until the agent restarts.
 
 ## What the phone can do
 
@@ -72,6 +72,8 @@ python -m unittest discover -s tests -p 'test_*.py'
 ```
 
 Native speech recognition requires a custom development build; Expo Go users can use the phone keyboard's dictation instead. Check the manual-testing list for the phone voice flow.
+
+Standalone builds allow cleartext HTTP on private networks through `expo-build-properties`, because the agent's documented development mode (`--allow-insecure-dev`) is plaintext. The client still refuses non-private hosts and requires `https://` whenever Local-only mode is off. For production use, run the agent with a certificate the phone already trusts.
 
 See:
 

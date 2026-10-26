@@ -625,6 +625,19 @@ class Handler(BaseHTTPRequestHandler):
         sys.stderr.write(f"[{utc_now()}] {self.address_string()} {format % args}\n")
 
 
+def local_addresses() -> list[str]:
+    """Non-loopback IPv4 addresses the phone can actually reach."""
+    addresses: list[str] = []
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            address = info[4][0]
+            if address not in addresses and not address.startswith("127."):
+                addresses.append(address)
+    except OSError:
+        pass
+    return addresses
+
+
 def build_server(host: str, port: int, state: AgentState, cert: str | None, key: str | None, allow_insecure: bool) -> ThreadingHTTPServer:
     if bool(cert) != bool(key):
         raise ValueError("--cert and --key must be supplied together.")
@@ -653,7 +666,10 @@ def main() -> None:
     server = build_server(args.host, args.port, state, args.cert, args.key, args.allow_insecure_dev)
     scheme = "https" if args.cert else "http"
     print(f"{APP_NAME} agent listening at {scheme}://{args.host}:{args.port}")
+    for address in local_addresses():
+        print(f"Enter this address on your phone: {scheme}://{address}:{args.port}")
     print(f"One-time pairing code: {state.pairing_code}")
+    print("If the phone cannot connect, allow Python through Windows Firewall for private networks.")
     print("Keep this window open while pairing. Press Ctrl+C to stop.")
     try:
         server.serve_forever()
