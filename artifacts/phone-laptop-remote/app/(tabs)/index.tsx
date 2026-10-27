@@ -2,7 +2,6 @@ import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
-import Constants from 'expo-constants';
 import * as Speech from 'expo-speech';
 import { useColors } from '@/hooks/useColors';
 import { useRemote } from '@/context/RemoteContext';
@@ -26,8 +25,6 @@ type SystemSnapshot = {
   memory_percent?: number;
   uptime_seconds?: number;
 };
-
-type SpeechRecognitionPackage = typeof import('expo-speech-recognition');
 
 type QuickActionItem = {
   icon: keyof typeof Feather.glyphMap;
@@ -111,57 +108,14 @@ export default function Dashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [voiceListening, setVoiceListening] = useState(false);
   const [system, setSystem] = useState<SystemSnapshot | null>(null);
-  const [nativeVoiceAvailable, setNativeVoiceAvailable] = useState<boolean | null>(null);
   const voiceSubmissionRef = useRef(false);
-  const speechRecognitionRef = useRef<SpeechRecognitionPackage | null>(null);
+  const speechRecognitionRef = useRef<null>(null);
 
   useEffect(() => {
-    let active = true;
-    let listeners: { remove: () => void }[] = [];
-
-    // expo-speech-recognition is a native module not available in Expo Go.
-    // Guard against it by checking whether we're running in Expo Go before importing.
-    const isExpoGo =
-      Constants?.expoApiUrlPrefix != null &&
-      (Platform?.isTVOS ?? false) === false;
-
-    if (isExpoGo) {
-      if (active) setNativeVoiceAvailable(false);
-      return;
-    }
-
-    void import('expo-speech-recognition').then((module) => {
-      if (!active) return;
-      speechRecognitionRef.current = module;
-      setNativeVoiceAvailable(true);
-      const speech = module.ExpoSpeechRecognitionModule;
-      listeners = [
-        speech.addListener('start', () => setVoiceListening(true)),
-        speech.addListener('end', () => setVoiceListening(false)),
-        speech.addListener('result', (event) => {
-          const transcript = event.results[0]?.transcript?.trim();
-          if (!transcript) return;
-          voiceSubmissionRef.current = true;
-          setCommand(transcript);
-          toast.show({ kind: 'info', title: 'Transcript ready', message: 'Review it, then tap send.' });
-        }),
-        speech.addListener('error', (event) => {
-          setVoiceListening(false);
-          voiceSubmissionRef.current = false;
-          toast.show({ kind: 'error', title: 'Voice input stopped', message: event.message || 'Check microphone permission and try again.' });
-        }),
-      ];
-    }).catch(() => {
-      if (active) setNativeVoiceAvailable(false);
-    });
     return () => {
-      active = false;
-      listeners.forEach((listener) => listener.remove());
-      speechRecognitionRef.current?.ExpoSpeechRecognitionModule.abort();
-      speechRecognitionRef.current = null;
       void Speech.stop();
     };
-  }, [toast]);
+  }, []);
 
   const loadTelemetry = useCallback(async () => {
     if (!selectedLaptop?.token) {
@@ -254,47 +208,22 @@ export default function Dashboard() {
   };
 
   const startVoiceRecognition = async () => {
-    try {
-      const speech = speechRecognitionRef.current?.ExpoSpeechRecognitionModule;
-      if (!speech) {
-        if (nativeVoiceAvailable === null) {
-          toast.show({ kind: 'info', title: 'Voice input is loading', message: 'Try the mic again in a moment.' });
-        } else {
-          showUserMessage(
-            'Native voice input unavailable',
-            'This build does not include the native speech module. In Expo Go, tap the command field and use your phone keyboard microphone. For the in-app mic, install a custom development build.',
-          );
-        }
-        return;
-      }
-      const permission = await speech.requestPermissionsAsync();
-      if (!permission.granted) {
-        toast.show({ kind: 'error', title: 'Microphone permission denied', message: 'Enable it in your phone settings to use voice input.' });
-        return;
-      }
-      voiceSubmissionRef.current = false;
-      setCommand('');
-      await Speech.stop();
-      speech.start({
-        lang: 'en-US',
-        interimResults: false,
-        continuous: false,
-        maxAlternatives: 1,
-      });
-    } catch {
-      setVoiceListening(false);
-      toast.show({ kind: 'error', title: 'Could not start voice input', message: 'Check microphone permission and your phone’s speech service.' });
-    }
+    // Native speech recognition requires a custom development build.
+    // In Expo Go, use your phone's keyboard microphone instead.
+    showUserMessage(
+      'Voice input unavailable',
+      'Native voice recognition requires a custom development build. Tap the command field and use your phone keyboard microphone to dictate commands.',
+    );
   };
 
   const toggleVoice = () => {
     if (voiceListening) {
-      speechRecognitionRef.current?.ExpoSpeechRecognitionModule.stop();
+      setVoiceListening(false);
       return;
     }
     confirmUserAction(
       'Start voice input?',
-      'Your phone’s speech-recognition service may process the audio. The transcript stays in this app; nothing is sent to the laptop until you review it and tap send.',
+      'Voice recognition requires a custom development build. In Expo Go, tap the command field and use your phone keyboard microphone to dictate.',
       'Start listening',
       () => { void startVoiceRecognition(); },
     );

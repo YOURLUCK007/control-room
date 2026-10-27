@@ -2,7 +2,7 @@
   "expo": {
     "name": "Laptop Remote",
     "slug": "phone-laptop-remote",
-    "version": "1.0.0",
+    "version": "58.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "phone-laptop-remote",
@@ -23,7 +23,7 @@
       "permissions": [
         "android.permission.RECORD_AUDIO"
       ],
-      "package": "com.anonymous.phonelaptopremote"
+      "package": "com.laptopremote.phone"
     },
     "web": {
       "favicon": "./assets/images/icon.png"
@@ -36,16 +36,6 @@
           "android": {
             "usesCleartextTraffic": true
           }
-        }
-      ],
-      [
-        "expo-speech-recognition",
-        {
-          "microphonePermission": "Allow Laptop Remote to use the microphone for voice commands.",
-          "speechRecognitionPermission": "Allow Laptop Remote to recognize voice commands.",
-          "androidSpeechServicePackages": [
-            "com.google.android.googlequicksearchbox"
-          ]
         }
       ]
     ],
