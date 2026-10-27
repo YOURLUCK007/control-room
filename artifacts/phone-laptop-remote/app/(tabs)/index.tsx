@@ -2,6 +2,7 @@ import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import Constants from 'expo-constants';
 import * as Speech from 'expo-speech';
 import { useColors } from '@/hooks/useColors';
 import { useRemote } from '@/context/RemoteContext';
@@ -117,6 +118,18 @@ export default function Dashboard() {
   useEffect(() => {
     let active = true;
     let listeners: { remove: () => void }[] = [];
+
+    // expo-speech-recognition is a native module not available in Expo Go.
+    // Guard against it by checking whether we're running in Expo Go before importing.
+    const isExpoGo =
+      Constants?.expoApiUrlPrefix != null &&
+      (Platform?.isTVOS ?? false) === false;
+
+    if (isExpoGo) {
+      if (active) setNativeVoiceAvailable(false);
+      return;
+    }
+
     void import('expo-speech-recognition').then((module) => {
       if (!active) return;
       speechRecognitionRef.current = module;
@@ -139,7 +152,6 @@ export default function Dashboard() {
         }),
       ];
     }).catch(() => {
-      // Expo Go does not include this native module; keyboard dictation remains available.
       if (active) setNativeVoiceAvailable(false);
     });
     return () => {
